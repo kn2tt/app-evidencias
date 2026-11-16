@@ -21,7 +21,11 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   bool _inicializando = true;
   bool _capturando = false;
+  bool _cambiandoCamara = false;
+  bool _panelExpandido = true;
+
   String? _error;
+  FlashMode _modoFlash = FlashMode.off;
 
   @override
   void initState() {
@@ -34,7 +38,9 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     _inicializarCamara();
   }
 
-  Future<void> _inicializarCamara() async {
+  Future<void> _inicializarCamara({
+    CameraDescription? camara,
+  }) async {
     try {
       final camaras = await availableCameras();
 
@@ -42,13 +48,15 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         throw Exception('No se encontró ninguna cámara disponible.');
       }
 
-      final camaraTrasera = camaras.firstWhere(
-        (camara) => camara.lensDirection == CameraLensDirection.back,
-        orElse: () => camaras.first,
-      );
+      final camaraSeleccionada = camara ??
+          camaras.firstWhere(
+            (element) =>
+                element.lensDirection == CameraLensDirection.back,
+            orElse: () => camaras.first,
+          );
 
       final controller = CameraController(
-        camaraTrasera,
+        camaraSeleccionada,
         ResolutionPreset.high,
         enableAudio: false,
       );
@@ -64,6 +72,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         _controller = controller;
         _inicializando = false;
         _error = null;
+        _modoFlash = FlashMode.off;
       });
     } catch (e) {
       if (!mounted) return;
@@ -113,7 +122,97 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     }
   }
 
+  Future<void> _cambiarCamara() async {
+    if (_cambiandoCamara || _inicializando) return;
+
+    setState(() {
+      _cambiandoCamara = true;
+      _inicializando = true;
+      _error = null;
+    });
+
+    final camaraActual = _controller?.description;
+
+    await _controller?.dispose();
+    _controller = null;
+
+    try {
+      final camaras = await availableCameras();
+
+      if (camaras.length < 2) {
+        throw Exception('No hay otra cámara disponible.');
+      }
+
+      final nuevaCamara = camaras.firstWhere(
+        (camara) =>
+            camara.lensDirection != camaraActual?.lensDirection,
+        orElse: () => camaras.first,
+      );
+
+      await _inicializarCamara(camara: nuevaCamara);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _inicializando = false;
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cambiandoCamara = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _cambiarFlash() async {
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    FlashMode siguienteModo;
+
+    switch (_modoFlash) {
+      case FlashMode.off:
+        siguienteModo = FlashMode.auto;
+        break;
+      case FlashMode.auto:
+        siguienteModo = FlashMode.always;
+        break;
+      case FlashMode.always:
+        siguienteModo = FlashMode.off;
+        break;
+      default:
+        siguienteModo = FlashMode.off;
+    }
+
+    try {
+      await controller.setFlashMode(siguienteModo);
+
+      if (!mounted) return;
+
+      setState(() {
+        _modoFlash = siguienteModo;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El flash no está disponible en esta cámara.',
+          ),
+        ),
+      );
+    }
+  }
+
   void _eliminarFotografia(int indice) {
+    if (indice < 0 || indice >= _fotografias.length) return;
+
     setState(() {
       _fotografias.removeAt(indice);
     });
@@ -125,12 +224,26 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         builder: (context) => PhotoPreviewScreen(
           fotografias: _fotografias,
           indiceInicial: indice,
-          onEliminar: (indice) {
-            _eliminarFotografia(indice);
-          },
+          onEliminar: _eliminarFotografia,
         ),
       ),
     );
+  }
+
+  void _alternarPanel() {
+    setState(() {
+      _panelExpandido = !_panelExpandido;
+    });
+  }
+
+  void _gestionarDeslizamientoVertical(DragEndDetails details) {
+    final velocidad = details.primaryVelocity ?? 0;
+
+    if (velocidad < -100 && !_panelExpandido) {
+      _alternarPanel();
+    } else if (velocidad > 100 && _panelExpandido) {
+      _alternarPanel();
+    }
   }
 
   @override
@@ -148,56 +261,80 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _construirVistaCamara(),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onVerticalDragEnd: _gestionarDeslizamientoVertical,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _construirVistaCamara(),
 
-          if (!_inicializando && _error == null) ...[
-            Positioned(
-              top: 12,
-              left: 20,
-              right: 20,
-              child: SafeArea(
-                bottom: false,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _botonSuperior(
-                      icono: Icons.arrow_back,
-                      onTap: () => Navigator.of(context).maybePop(),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
+            if (!_inicializando && _error == null) ...[
+              Positioned(
+                top: 12,
+                left: 20,
+                right: 20,
+                child: SafeArea(
+                  bottom: false,
+                  child: Row(
+                    children: [
+                      _botonSuperior(
+                        icono: Icons.arrow_back,
+                        onTap: () => Navigator.of(context).maybePop(),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(20),
+
+                      const Spacer(),
+
+                      _botonSuperior(
+                        icono: _modoFlash == FlashMode.off
+                            ? Icons.flash_off
+                            : _modoFlash == FlashMode.auto
+                                ? Icons.flash_auto
+                                : Icons.flash_on,
+                        onTap: _cambiarFlash,
                       ),
-                      child: Text(
-                        '${_fotografias.length} fotografías',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+
+                      const SizedBox(width: 10),
+
+                      _botonSuperior(
+                        icono: Icons.flip_camera_android,
+                        onTap: _cambiarCamara,
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${_fotografias.length} fotografías',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _construirControlesCamara(),
-            ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _construirControlesCamara(),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -290,8 +427,6 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       builder: (context, constraints) {
         final previewSize = controller.value.previewSize!;
 
-        // La vista previa se adapta a la orientación vertical
-        // del teléfono y cubre todo el espacio disponible.
         final cameraWidth = previewSize.height;
         final cameraHeight = previewSize.width;
 
@@ -313,10 +448,12 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   }
 
   Widget _construirControlesCamara() {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       padding: EdgeInsets.fromLTRB(
         24,
-        18,
+        10,
         24,
         MediaQuery.of(context).padding.bottom + 28,
       ),
@@ -334,9 +471,26 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_fotografias.isNotEmpty)
+          GestureDetector(
+            onTap: _alternarPanel,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                top: 4,
+                bottom: 12,
+              ),
+              child: Icon(
+                _panelExpandido
+                    ? Icons.keyboard_arrow_down
+                    : Icons.keyboard_arrow_up,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+
+          if (_panelExpandido && _fotografias.isNotEmpty) ...[
             SizedBox(
-              height: 72,
+              height: 76,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _fotografias.length,
@@ -345,24 +499,58 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                 itemBuilder: (context, index) {
                   final fotografia = _fotografias[index];
 
-                  return GestureDetector(
-                    onTap: () => _abrirFotografia(index),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.file(
-                        File(fotografia.path),
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                      ),
+                  return SizedBox(
+                    width: 76,
+                    height: 76,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(
+                          child: GestureDetector(
+                            onTap: () => _abrirFotografia(index),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(fotografia.path),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        Positioned(
+                          top: -5,
+                          right: -5,
+                          child: GestureDetector(
+                            onTap: () => _eliminarFotografia(index),
+                            child: Container(
+                              width: 23,
+                              height: 23,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
               ),
             ),
 
-          if (_fotografias.isNotEmpty)
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
+          ],
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -470,12 +658,17 @@ class PhotoPreviewScreen extends StatefulWidget {
 
 class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
   late int _indiceActual;
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
 
     _indiceActual = widget.indiceInicial;
+
+    _pageController = PageController(
+      initialPage: _indiceActual,
+    );
   }
 
   void _eliminarActual() {
@@ -491,12 +684,22 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
         _indiceActual = widget.fotografias.length - 1;
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _pageController.hasClients) {
+        _pageController.jumpToPage(_indiceActual);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final fotografia = widget.fotografias[_indiceActual];
-
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -520,23 +723,37 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
           ),
         ],
       ),
-      body: Center(
-        child: InteractiveViewer(
-          minScale: 0.8,
-          maxScale: 4,
-          child: Image.file(
-            File(fotografia.path),
-            fit: BoxFit.contain,
-            width: double.infinity,
-          ),
-        ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.fotografias.length,
+        onPageChanged: (indice) {
+          setState(() {
+            _indiceActual = indice;
+          });
+        },
+        itemBuilder: (context, indice) {
+          final fotografia = widget.fotografias[indice];
+
+          return Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4,
+              child: Image.file(
+                File(fotografia.path),
+                key: ValueKey(fotografia.path),
+                fit: BoxFit.contain,
+                width: double.infinity,
+              ),
+            ),
+          );
+        },
       ),
       bottomNavigationBar: Container(
         color: Colors.black,
         padding: const EdgeInsets.all(16),
         child: SafeArea(
           child: Text(
-            'Puedes ampliar la imagen con dos dedos.',
+            'Desliza hacia los lados para cambiar de fotografía.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.7),
