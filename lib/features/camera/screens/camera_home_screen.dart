@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../models/watermark_settings.dart';
+import '../services/location_service.dart';
+import '../services/watermark_composer_service.dart';
 import '../services/watermark_settings_service.dart';
 import 'watermark_settings_screen.dart';
 
@@ -24,6 +26,9 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   final WatermarkSettingsService _watermarkService =
       WatermarkSettingsService();
+  final WatermarkComposerService _composerService =
+      WatermarkComposerService();
+  final LocationService _locationService = LocationService();
 
   WatermarkSettings _watermarkSettings =
       const WatermarkSettings();
@@ -87,7 +92,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _watermarkSettings = resultado;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,7 +112,9 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       final camaras = await availableCameras();
 
       if (camaras.isEmpty) {
-        throw Exception('No se encontró ninguna cámara disponible.');
+        throw Exception(
+          'No se encontró ninguna cámara disponible.',
+        );
       }
 
       final camaraSeleccionada = camara ??
@@ -146,6 +153,16 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     }
   }
 
+  bool get _requiereUbicacion {
+    return _watermarkSettings.showAddress ||
+        _watermarkSettings.showCoordinates ||
+        _watermarkSettings.showAltitude ||
+        _watermarkSettings.showAccuracy ||
+        _watermarkSettings.showSpeed ||
+        _watermarkSettings.showCompass ||
+        _watermarkSettings.showMap;
+  }
+
   Future<void> _tomarFotografia() async {
     final controller = _controller;
 
@@ -160,19 +177,63 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     });
 
     try {
-      final fotografia = await controller.takePicture();
+      // 1. Capturar la fotografía original.
+      final fotografiaOriginal = await controller.takePicture();
+
+      // 2. Obtener ubicación si la configuración la necesita.
+      LocationData? ubicacion;
+
+      if (_requiereUbicacion) {
+        try {
+          ubicacion = await _locationService.getCurrentLocation();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'No se pudo obtener la ubicación. '
+                  'La foto se guardará sin datos GPS. $e',
+                ),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      }
+
+      // 3. Calcular el número correlativo.
+      final numeroSecuencia =
+          _watermarkSettings.sequenceStart + _fotografias.length;
+
+      // 4. Aplicar la marca de agua y guardar la imagen procesada.
+      final fotografiaProcesada = await _composerService.compose(
+        imagePath: fotografiaOriginal.path,
+        settings: _watermarkSettings,
+        location: ubicacion,
+        sequenceNumber: numeroSecuencia,
+      );
 
       if (!mounted) return;
 
+      // 5. Mostrar la fotografía procesada en la galería interna.
       setState(() {
-        _fotografias.add(fotografia);
+        _fotografias.add(XFile(fotografiaProcesada.path));
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fotografía capturada y procesada correctamente.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo tomar la fotografía: $e'),
+          content: Text(
+            'No se pudo procesar la fotografía: $e',
+          ),
         ),
       );
     } finally {
@@ -259,7 +320,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _modoFlash = siguienteModo;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -344,9 +405,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                         icono: Icons.arrow_back,
                         onTap: () => Navigator.of(context).maybePop(),
                       ),
-
                       const Spacer(),
-
                       _botonSuperior(
                         icono: _modoFlash == FlashMode.off
                             ? Icons.flash_off
@@ -355,23 +414,17 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                                 : Icons.flash_on,
                         onTap: _cambiarFlash,
                       ),
-
                       const SizedBox(width: 10),
-
                       _botonSuperior(
                         icono: Icons.flip_camera_android,
                         onTap: _cambiarCamara,
                       ),
-
                       const SizedBox(width: 10),
-
                       _botonSuperior(
                         icono: Icons.tune,
                         onTap: _abrirConfiguracionMarcaAgua,
                       ),
-
                       const SizedBox(width: 10),
-
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -394,7 +447,6 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                   ),
                 ),
               ),
-
               Positioned(
                 left: 0,
                 right: 0,
@@ -556,7 +608,6 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
               ),
             ),
           ),
-
           if (_panelExpandido && _fotografias.isNotEmpty) ...[
             SizedBox(
               height: 76,
@@ -586,7 +637,6 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                             ),
                           ),
                         ),
-
                         Positioned(
                           top: -5,
                           right: -5,
@@ -617,19 +667,15 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                 },
               ),
             ),
-
             const SizedBox(height: 20),
           ],
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               GestureDetector(
                 onTap: _fotografias.isNotEmpty
-                    ? () => _abrirFotografia(
-                          _fotografias.length - 1,
-                        )
+                    ? () => _abrirFotografia(_fotografias.length - 1)
                     : null,
                 child: Container(
                   width: 52,
@@ -637,9 +683,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: Colors.white54,
-                    ),
+                    border: Border.all(color: Colors.white54),
                   ),
                   child: _fotografias.isNotEmpty
                       ? ClipRRect(
@@ -656,7 +700,6 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                         ),
                 ),
               ),
-
               GestureDetector(
                 onTap: _capturando ? null : _tomarFotografia,
                 child: Container(
@@ -695,11 +738,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                   ),
                 ),
               ),
-
-              const SizedBox(
-                width: 52,
-                height: 52,
-              ),
+              const SizedBox(width: 52, height: 52),
             ],
           ),
         ],
