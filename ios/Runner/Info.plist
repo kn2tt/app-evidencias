@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>La aplicación necesita acceder a la cámara para capturar fotografías de evidencias.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>La aplicación necesita acceder a tu ubicación para incorporar la dirección y coordenadas GPS en las fotografías de evidencias.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>La aplicación necesita acceder a tus fotos para seleccionar imágenes que se utilizarán como logotipo en la marca de agua.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
