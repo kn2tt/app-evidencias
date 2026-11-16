@@ -6,6 +6,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../models/watermark_settings.dart';
+import '../services/watermark_settings_service.dart';
+import 'watermark_settings_screen.dart';
 
 class CameraHomeScreen extends StatefulWidget {
   const CameraHomeScreen({super.key});
@@ -18,6 +21,12 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   CameraController? _controller;
 
   final List<XFile> _fotografias = [];
+
+  final WatermarkSettingsService _watermarkService =
+      WatermarkSettingsService();
+
+  WatermarkSettings _watermarkSettings =
+      const WatermarkSettings();
 
   bool _inicializando = true;
   bool _capturando = false;
@@ -35,7 +44,60 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       SystemUiMode.immersiveSticky,
     );
 
+    _cargarConfiguracionMarcaAgua();
     _inicializarCamara();
+  }
+
+  Future<void> _cargarConfiguracionMarcaAgua() async {
+    try {
+      final configuracion = await _watermarkService.load();
+
+      if (!mounted) return;
+
+      setState(() {
+        _watermarkSettings = configuracion;
+      });
+    } catch (_) {
+      // Se mantienen los valores predeterminados.
+    }
+  }
+
+  Future<void> _abrirConfiguracionMarcaAgua() async {
+    try {
+      final configuracionGuardada =
+          await _watermarkService.load();
+
+      if (!mounted) return;
+
+      setState(() {
+        _watermarkSettings = configuracionGuardada;
+      });
+
+      final resultado =
+          await Navigator.of(context).push<WatermarkSettings>(
+        MaterialPageRoute(
+          builder: (context) => WatermarkSettingsScreen(
+            initialSettings: _watermarkSettings,
+          ),
+        ),
+      );
+
+      if (!mounted || resultado == null) return;
+
+      setState(() {
+        _watermarkSettings = resultado;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo abrir la configuración de marca de agua.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _inicializarCamara({
@@ -299,6 +361,13 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                       _botonSuperior(
                         icono: Icons.flip_camera_android,
                         onTap: _cambiarCamara,
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      _botonSuperior(
+                        icono: Icons.tune,
+                        onTap: _abrirConfiguracionMarcaAgua,
                       ),
 
                       const SizedBox(width: 10),
