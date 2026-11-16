@@ -78,7 +78,7 @@ class WatermarkComposerService {
         );
       }
 
-      final lines = _buildLines(
+      final lines = buildLines(
         settings: settings,
         location: location,
         sequenceNumber: sequenceNumber,
@@ -152,7 +152,7 @@ class WatermarkComposerService {
     }
   }
 
-  List<String> _buildLines({
+  List<String> buildLines({
     required WatermarkSettings settings,
     required LocationData? location,
     required int sequenceNumber,
