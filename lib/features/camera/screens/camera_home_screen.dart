@@ -542,7 +542,9 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   // VISTA PREVIA DE MARCA DE AGUA
   // ---------------------------------------------------------
 
-  Widget _construirMarcaAguaPreview() {
+  Widget _construirMarcaAguaPreview({
+    required double scale,
+  }) {
     final settings = _watermarkSettings;
     final lines = _obtenerLineasPreview();
 
@@ -568,9 +570,17 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       _ => TextAlign.left,
     };
 
+    final previewFontSize =
+        (settings.fontSize * scale).clamp(8.0, 40.0);
+
+    final previewMargin = settings.margin * scale;
+    final previewPadding = settings.backgroundPadding * scale;
+    final previewLogoSize = settings.logoSize * scale;
+    final previewRadius = settings.backgroundRadius * scale;
+
     final textStyle = TextStyle(
       color: Color(settings.colorValue),
-      fontSize: settings.fontSize,
+      fontSize: previewFontSize,
       fontFamily: settings.fontFamily,
       fontWeight:
           settings.bold ? FontWeight.bold : FontWeight.normal,
@@ -593,7 +603,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         child: Align(
           alignment: alignment,
           child: Padding(
-            padding: EdgeInsets.all(settings.margin),
+            padding: EdgeInsets.all(previewMargin),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment:
@@ -608,12 +618,12 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                     opacity:
                         settings.logoOpacity.clamp(0.0, 1.0),
                     child: Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: 8,
+                      padding: EdgeInsets.only(
+                        bottom: 8 * scale,
                       ),
                       child: Image.file(
                         File(settings.logoPath!),
-                        width: settings.logoSize,
+                        width: previewLogoSize,
                         fit: BoxFit.contain,
                         errorBuilder:
                             (context, error, stackTrace) {
@@ -625,9 +635,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
                 if (lines.isNotEmpty)
                   Container(
-                    padding: EdgeInsets.all(
-                      settings.backgroundPadding,
-                    ),
+                    padding: EdgeInsets.all(previewPadding),
                     decoration: BoxDecoration(
                       color: Color(
                         settings.backgroundColorValue,
@@ -636,7 +644,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                             .clamp(0.0, 1.0),
                       ),
                       borderRadius: BorderRadius.circular(
-                        settings.backgroundRadius,
+                        previewRadius,
                       ),
                     ),
                     child: Text(
@@ -883,7 +891,11 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                 ),
               ),
 
-              _construirMarcaAguaPreview(),
+              _construirMarcaAguaPreview(
+                scale: (constraints.maxWidth / cameraWidth)
+                    .clamp(0.25, 1.0)
+                    .toDouble(),
+              ),
             ],
           ),
         );

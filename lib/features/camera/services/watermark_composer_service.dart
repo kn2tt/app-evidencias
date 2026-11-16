@@ -174,7 +174,19 @@ class WatermarkComposerService {
     }
 
     if (settings.showAddress && location != null) {
-      values['address'] = location.address;
+      final addressLines = <String>[
+        location.street,
+        location.sector,
+        location.district,
+      ].where((part) => part.trim().isNotEmpty).toList();
+
+      if (addressLines.isNotEmpty) {
+        values['address'] = addressLines.join('\n');
+      } else if (location.address.isNotEmpty &&
+          location.address != 'Dirección no disponible') {
+        // Compatibilidad con ubicaciones guardadas anteriormente.
+        values['address'] = location.address;
+      }
     }
 
     if (settings.showCoordinates && location != null) {
@@ -198,6 +210,7 @@ class WatermarkComposerService {
 
     if (settings.showSpeed && location != null) {
       final speedKmh = location.speed * 3.6;
+
       values['speed'] =
           'Velocidad: ${speedKmh.toStringAsFixed(1)} km/h';
     }

@@ -783,11 +783,46 @@ class _WatermarkSettingsScreenState
             _settings.copyWith(showSpeed: v),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildCompassSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         _switch(
-          title: 'Orientación / brújula',
+          title: 'Mostrar orientación / brújula',
+          subtitle:
+              'Incluir el punto cardinal y los grados de orientación en la fotografía.',
           value: _settings.showCompass,
           onChanged: (v) => _update(
             _settings.copyWith(showCompass: v),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.explore_outlined,
+                size: 32,
+                color: AppTheme.primaryColor,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'La orientación se obtiene mediante los sensores del dispositivo.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1399,6 +1434,12 @@ class _WatermarkSettingsScreenState
             subtitle: 'Dirección, coordenadas y datos de captura',
             icon: Icons.location_on_outlined,
             child: _buildLocationSection(),
+          ),
+          _expansionSection(
+            title: 'Orientación y brújula',
+            subtitle: 'Punto cardinal y grados de orientación',
+            icon: Icons.explore_outlined,
+            child: _buildCompassSection(),
           ),
           _expansionSection(
             title: 'Mapa',
