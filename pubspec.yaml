@@ -39,6 +39,7 @@ dependencies:
   shared_preferences: ^2.5.6
   geolocator: ^14.1.2
   geocoding: ^5.0.1
+  flutter_device_compass: ^2.2.0
   image_picker: ^1.2.4
   image: ^4.13.1
   intl: ^0.20.3

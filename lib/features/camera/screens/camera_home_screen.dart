@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_device_compass/flutter_device_compass.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../models/watermark_settings.dart';
@@ -47,6 +49,10 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   bool _obteniendoUbicacion = false;
 
+  StreamSubscription<CompassEvent>? _suscripcionBrujula;
+
+  double? _rumboActual;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +79,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         _watermarkSettings = configuracion;
       });
 
+      _configurarBrujula();
+
       if (_requiereUbicacion) {
         _actualizarUbicacionPreview();
       }
@@ -92,6 +100,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         _watermarkSettings = configuracionGuardada;
       });
 
+      _configurarBrujula();
+
       final resultado =
           await Navigator.of(context).push<WatermarkSettings>(
         MaterialPageRoute(
@@ -106,6 +116,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _watermarkSettings = resultado;
       });
+
+      _configurarBrujula();
 
       if (_requiereUbicacion) {
         _actualizarUbicacionPreview();
@@ -164,6 +176,39 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     }
   }
 
+  // ---------------------------------------------------------
+  // BRÚJULA
+  // ---------------------------------------------------------
+
+  void _configurarBrujula() {
+    if (!_watermarkSettings.showCompass) {
+      _suscripcionBrujula?.cancel();
+      _suscripcionBrujula = null;
+      _rumboActual = null;
+      return;
+    }
+
+    if (_suscripcionBrujula != null) return;
+
+    _suscripcionBrujula = FlutterCompass.events?.listen(
+      (CompassEvent event) {
+        final heading = event.headingForCameraMode;
+
+        if (!mounted || heading == null || !heading.isFinite) {
+          return;
+        }
+
+        setState(() {
+          _rumboActual = (heading + 360) % 360;
+        });
+      },
+    );
+  }
+
+  // ---------------------------------------------------------
+  // LÍNEAS DE VISTA PREVIA
+  // ---------------------------------------------------------
+
   List<String> _obtenerLineasPreview() {
     final numeroSecuencia =
         _watermarkSettings.sequenceStart + _fotografias.length;
@@ -172,6 +217,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       settings: _watermarkSettings,
       location: _ubicacionActual,
       sequenceNumber: numeroSecuencia,
+      heading: _rumboActual,
     );
   }
 
@@ -266,8 +312,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
             });
           }
         } catch (e) {
-          // Si falla la actualización, se utilizan los últimos
-          // datos disponibles de la vista previa.
+          // Se utilizan los últimos datos disponibles.
           ubicacion = _ubicacionActual;
 
           if (mounted) {
@@ -298,6 +343,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         settings: _watermarkSettings,
         location: ubicacion,
         sequenceNumber: numeroSecuencia,
+        heading: _rumboActual,
       );
 
       if (!mounted) return;
@@ -614,6 +660,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   @override
   void dispose() {
     _controller?.dispose();
+    _suscripcionBrujula?.cancel();
 
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.edgeToEdge,

@@ -16,6 +16,7 @@ class WatermarkComposerService {
     required WatermarkSettings settings,
     LocationData? location,
     required int sequenceNumber,
+    double? heading,
   }) async {
     final originalFile = File(imagePath);
 
@@ -82,6 +83,7 @@ class WatermarkComposerService {
         settings: settings,
         location: location,
         sequenceNumber: sequenceNumber,
+        heading: heading,
       );
 
       if (lines.isNotEmpty) {
@@ -156,6 +158,7 @@ class WatermarkComposerService {
     required WatermarkSettings settings,
     required LocationData? location,
     required int sequenceNumber,
+    double? heading,
   }) {
     final values = <String, String>{};
 
@@ -197,6 +200,30 @@ class WatermarkComposerService {
       final speedKmh = location.speed * 3.6;
       values['speed'] =
           'Velocidad: ${speedKmh.toStringAsFixed(1)} km/h';
+    }
+
+    if (settings.showCompass &&
+        heading != null &&
+        heading.isFinite) {
+      const directions = [
+        'N',
+        'NE',
+        'E',
+        'SE',
+        'S',
+        'SO',
+        'O',
+        'NO',
+      ];
+
+      final normalizedHeading = (heading + 360) % 360;
+
+      final directionIndex =
+          ((normalizedHeading + 22.5) / 45).floor() % 8;
+
+      values['compass'] =
+          'Brújula: ${directions[directionIndex]} '
+          '(${normalizedHeading.toStringAsFixed(0)}°)';
     }
 
     if (settings.showSequence) {
