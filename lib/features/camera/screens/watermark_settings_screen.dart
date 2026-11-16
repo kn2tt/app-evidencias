@@ -1,3 +1,4 @@
+
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/watermark_settings.dart';
 import '../services/watermark_settings_service.dart';
+import '../widgets/watermark_order_dialog.dart';
 
 class WatermarkSettingsScreen extends StatefulWidget {
   final WatermarkSettings initialSettings;
@@ -81,6 +83,19 @@ class _WatermarkSettingsScreenState
     setState(() {
       _settings = updated;
     });
+  }
+
+  Future<void> _openContentOrder() async {
+    final result = await showWatermarkOrderDialog(
+      context: context,
+      currentOrder: _settings.contentOrder,
+    );
+
+    if (result == null || !mounted) return;
+
+    _update(
+      _settings.copyWith(contentOrder: result),
+    );
   }
 
   Future<void> _pickLogo() async {
@@ -324,59 +339,63 @@ class _WatermarkSettingsScreenState
   }
 
   List<String> _buildPreviewLines() {
+    final values = <String, String?>{
+      'customText': _settings.showCustomText &&
+              _customTextController.text.trim().isNotEmpty
+          ? _customTextController.text.trim()
+          : null,
+      'address': _settings.showAddress
+          ? 'Av. Ejemplo, Lima, Perú'
+          : null,
+      'coordinates': _settings.showCoordinates
+          ? '-12.046374, -77.042793'
+          : null,
+      'altitude': _settings.showAltitude
+          ? 'Altitud: 150 m'
+          : null,
+      'speed': _settings.showSpeed
+          ? 'Velocidad: 0 km/h'
+          : null,
+      'dateTime': _settings.showDateTime
+          ? '15/11/2026 14:30:45'
+          : null,
+      'compass': _settings.showCompass
+          ? 'Orientación: NE'
+          : null,
+      'label': _settings.showLabel &&
+              _labelController.text.trim().isNotEmpty
+          ? _labelController.text.trim()
+          : null,
+      'sequence': _settings.showSequence
+          ? '${_settings.sequencePrefix}'
+              '${_settings.sequenceStart.toString().padLeft(_settings.sequenceDigits, '0')}'
+              '${_settings.sequenceSuffix}'
+          : null,
+      'accuracy': _settings.showAccuracy
+          ? 'Precisión: 5 m'
+          : null,
+      'note': _settings.showNote &&
+              _noteController.text.trim().isNotEmpty
+          ? _noteController.text.trim()
+          : null,
+    };
+
     final lines = <String>[];
 
-    if (_settings.showDateTime) {
-      lines.add('15/11/2026 14:30:45');
+    for (final key in _settings.contentOrder) {
+      final value = values[key];
+
+      if (value != null && value.isNotEmpty) {
+        lines.add(value);
+      }
     }
 
-    if (_settings.showAddress) {
-      lines.add('Av. Ejemplo, Lima, Perú');
-    }
-
-    if (_settings.showCoordinates) {
-      lines.add('-12.046374, -77.042793');
-    }
-
-    if (_settings.showAltitude) {
-      lines.add('Altitud: 150 m');
-    }
-
-    if (_settings.showAccuracy) {
-      lines.add('Precisión: 5 m');
-    }
-
-    if (_settings.showSpeed) {
-      lines.add('Velocidad: 0 km/h');
-    }
-
-    if (_settings.showCompass) {
-      lines.add('Orientación: NE');
-    }
-
-    if (_settings.showSequence) {
-      final number = _settings.sequenceStart
-          .toString()
-          .padLeft(_settings.sequenceDigits, '0');
-
-      lines.add(
-        '${_settings.sequencePrefix}$number${_settings.sequenceSuffix}',
-      );
-    }
-
-    if (_settings.showLabel &&
-        _labelController.text.trim().isNotEmpty) {
-      lines.add(_labelController.text.trim());
-    }
-
-    if (_settings.showCustomText &&
-        _customTextController.text.trim().isNotEmpty) {
-      lines.add(_customTextController.text.trim());
-    }
-
-    if (_settings.showNote &&
-        _noteController.text.trim().isNotEmpty) {
-      lines.add(_noteController.text.trim());
+    for (final entry in values.entries) {
+      if (!_settings.contentOrder.contains(entry.key) &&
+          entry.value != null &&
+          entry.value!.isNotEmpty) {
+        lines.add(entry.value!);
+      }
     }
 
     return lines;
@@ -1346,6 +1365,15 @@ class _WatermarkSettingsScreenState
           ),
           const SizedBox(height: 12),
           _buildPreview(),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: _openContentOrder,
+              icon: const Icon(Icons.swap_vert),
+              label: const Text('Ordenar elementos'),
+            ),
+          ),
           const SizedBox(height: 8),
           const Text(
             'Esta vista previa es ilustrativa. Los datos reales de captura se incorporarán al conectar la cámara y el procesamiento de fotografías.',
