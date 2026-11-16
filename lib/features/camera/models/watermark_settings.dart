@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 
 class WatermarkSettings {
@@ -7,7 +8,7 @@ class WatermarkSettings {
   final String timeFormat;
   final String timeZone;
 
-  // UBICACIÓN
+  // UBICACIÓN Y GPS
   final bool showAddress;
   final bool showCoordinates;
   final bool showAltitude;
@@ -37,6 +38,8 @@ class WatermarkSettings {
   final bool showSequence;
   final int sequenceStart;
   final int sequenceDigits;
+  final String sequencePrefix;
+  final String sequenceSuffix;
 
   // LOGOTIPO
   final bool showLogo;
@@ -45,14 +48,31 @@ class WatermarkSettings {
   final double logoOpacity;
   final String logoPosition;
 
-  // APARIENCIA
+  // APARIENCIA DEL TEXTO
   final double fontSize;
   final int colorValue;
+  final String fontFamily;
+  final bool bold;
+  final bool italic;
+  final bool textShadow;
+  final bool textOutline;
+  final int outlineColorValue;
+  final double outlineWidth;
+  final String textAlignment;
+  final double lineSpacing;
+
+  // FONDO DEL TEXTO
   final int backgroundColorValue;
   final double backgroundOpacity;
-  final String fontFamily;
+  final double backgroundPadding;
+  final double backgroundRadius;
+
+  // POSICIÓN GENERAL
   final String position;
   final double margin;
+
+  // ORDEN DE LOS ELEMENTOS
+  final List<String> contentOrder;
 
   // CALIDAD DE FOTOGRAFÍA
   final int imageQuality;
@@ -88,6 +108,8 @@ class WatermarkSettings {
     this.showSequence = false,
     this.sequenceStart = 1,
     this.sequenceDigits = 3,
+    this.sequencePrefix = '',
+    this.sequenceSuffix = '',
 
     this.showLogo = false,
     this.logoPath,
@@ -97,11 +119,37 @@ class WatermarkSettings {
 
     this.fontSize = 16,
     this.colorValue = 0xFFFFFFFF,
+    this.fontFamily = 'Roboto',
+    this.bold = false,
+    this.italic = false,
+    this.textShadow = true,
+    this.textOutline = false,
+    this.outlineColorValue = 0xFF000000,
+    this.outlineWidth = 1,
+    this.textAlignment = 'left',
+    this.lineSpacing = 1.2,
+
     this.backgroundColorValue = 0xFF000000,
     this.backgroundOpacity = 0,
-    this.fontFamily = 'Roboto',
+    this.backgroundPadding = 8,
+    this.backgroundRadius = 8,
+
     this.position = 'bottomRight',
     this.margin = 16,
+
+    this.contentOrder = const [
+      'dateTime',
+      'address',
+      'coordinates',
+      'altitude',
+      'accuracy',
+      'speed',
+      'compass',
+      'sequence',
+      'label',
+      'customText',
+      'note',
+    ],
 
     this.imageQuality = 95,
   });
@@ -111,6 +159,7 @@ class WatermarkSettings {
     String? dateFormat,
     String? timeFormat,
     String? timeZone,
+
     bool? showAddress,
     bool? showCoordinates,
     bool? showAltitude,
@@ -119,32 +168,54 @@ class WatermarkSettings {
     bool? showCompass,
     String? coordinatesFormat,
     String? addressFormat,
+
     bool? showMap,
     double? mapSize,
     double? mapOpacity,
     String? mapPosition,
+
     bool? showCustomText,
     String? customText,
+
     bool? showLabel,
     String? labelText,
     bool? showNote,
     String? noteText,
+
     bool? showSequence,
     int? sequenceStart,
     int? sequenceDigits,
+    String? sequencePrefix,
+    String? sequenceSuffix,
+
     bool? showLogo,
     String? logoPath,
     bool clearLogoPath = false,
     double? logoSize,
     double? logoOpacity,
     String? logoPosition,
+
     double? fontSize,
     int? colorValue,
+    String? fontFamily,
+    bool? bold,
+    bool? italic,
+    bool? textShadow,
+    bool? textOutline,
+    int? outlineColorValue,
+    double? outlineWidth,
+    String? textAlignment,
+    double? lineSpacing,
+
     int? backgroundColorValue,
     double? backgroundOpacity,
-    String? fontFamily,
+    double? backgroundPadding,
+    double? backgroundRadius,
+
     String? position,
     double? margin,
+    List<String>? contentOrder,
+
     int? imageQuality,
   }) {
     return WatermarkSettings(
@@ -159,8 +230,7 @@ class WatermarkSettings {
       showAccuracy: showAccuracy ?? this.showAccuracy,
       showSpeed: showSpeed ?? this.showSpeed,
       showCompass: showCompass ?? this.showCompass,
-      coordinatesFormat:
-          coordinatesFormat ?? this.coordinatesFormat,
+      coordinatesFormat: coordinatesFormat ?? this.coordinatesFormat,
       addressFormat: addressFormat ?? this.addressFormat,
 
       showMap: showMap ?? this.showMap,
@@ -179,6 +249,8 @@ class WatermarkSettings {
       showSequence: showSequence ?? this.showSequence,
       sequenceStart: sequenceStart ?? this.sequenceStart,
       sequenceDigits: sequenceDigits ?? this.sequenceDigits,
+      sequencePrefix: sequencePrefix ?? this.sequencePrefix,
+      sequenceSuffix: sequenceSuffix ?? this.sequenceSuffix,
 
       showLogo: showLogo ?? this.showLogo,
       logoPath: clearLogoPath ? null : (logoPath ?? this.logoPath),
@@ -188,13 +260,25 @@ class WatermarkSettings {
 
       fontSize: fontSize ?? this.fontSize,
       colorValue: colorValue ?? this.colorValue,
+      fontFamily: fontFamily ?? this.fontFamily,
+      bold: bold ?? this.bold,
+      italic: italic ?? this.italic,
+      textShadow: textShadow ?? this.textShadow,
+      textOutline: textOutline ?? this.textOutline,
+      outlineColorValue: outlineColorValue ?? this.outlineColorValue,
+      outlineWidth: outlineWidth ?? this.outlineWidth,
+      textAlignment: textAlignment ?? this.textAlignment,
+      lineSpacing: lineSpacing ?? this.lineSpacing,
+
       backgroundColorValue:
           backgroundColorValue ?? this.backgroundColorValue,
-      backgroundOpacity:
-          backgroundOpacity ?? this.backgroundOpacity,
-      fontFamily: fontFamily ?? this.fontFamily,
+      backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
+      backgroundPadding: backgroundPadding ?? this.backgroundPadding,
+      backgroundRadius: backgroundRadius ?? this.backgroundRadius,
+
       position: position ?? this.position,
       margin: margin ?? this.margin,
+      contentOrder: contentOrder ?? this.contentOrder,
 
       imageQuality: imageQuality ?? this.imageQuality,
     );
@@ -232,6 +316,8 @@ class WatermarkSettings {
       'showSequence': showSequence,
       'sequenceStart': sequenceStart,
       'sequenceDigits': sequenceDigits,
+      'sequencePrefix': sequencePrefix,
+      'sequenceSuffix': sequenceSuffix,
 
       'showLogo': showLogo,
       'logoPath': logoPath,
@@ -241,11 +327,24 @@ class WatermarkSettings {
 
       'fontSize': fontSize,
       'colorValue': colorValue,
+      'fontFamily': fontFamily,
+      'bold': bold,
+      'italic': italic,
+      'textShadow': textShadow,
+      'textOutline': textOutline,
+      'outlineColorValue': outlineColorValue,
+      'outlineWidth': outlineWidth,
+      'textAlignment': textAlignment,
+      'lineSpacing': lineSpacing,
+
       'backgroundColorValue': backgroundColorValue,
       'backgroundOpacity': backgroundOpacity,
-      'fontFamily': fontFamily,
+      'backgroundPadding': backgroundPadding,
+      'backgroundRadius': backgroundRadius,
+
       'position': position,
       'margin': margin,
+      'contentOrder': contentOrder,
 
       'imageQuality': imageQuality,
     };
@@ -272,6 +371,19 @@ class WatermarkSettings {
       return value is String ? value : fallback;
     }
 
+    List<String> readStringList(
+      String key,
+      List<String> fallback,
+    ) {
+      final value = map[key];
+
+      if (value is List) {
+        return value.whereType<String>().toList();
+      }
+
+      return fallback;
+    }
+
     return WatermarkSettings(
       showDateTime: readBool('showDateTime', true),
       dateFormat: readString('dateFormat', 'dd/MM/yyyy'),
@@ -284,8 +396,7 @@ class WatermarkSettings {
       showAccuracy: readBool('showAccuracy', false),
       showSpeed: readBool('showSpeed', false),
       showCompass: readBool('showCompass', false),
-      coordinatesFormat:
-          readString('coordinatesFormat', 'decimal'),
+      coordinatesFormat: readString('coordinatesFormat', 'decimal'),
       addressFormat: readString('addressFormat', 'full'),
 
       showMap: readBool('showMap', false),
@@ -304,6 +415,8 @@ class WatermarkSettings {
       showSequence: readBool('showSequence', false),
       sequenceStart: readInt('sequenceStart', 1),
       sequenceDigits: readInt('sequenceDigits', 3),
+      sequencePrefix: readString('sequencePrefix', ''),
+      sequenceSuffix: readString('sequenceSuffix', ''),
 
       showLogo: readBool('showLogo', false),
       logoPath: map['logoPath'] is String
@@ -315,12 +428,41 @@ class WatermarkSettings {
 
       fontSize: readDouble('fontSize', 16),
       colorValue: readInt('colorValue', 0xFFFFFFFF),
+      fontFamily: readString('fontFamily', 'Roboto'),
+      bold: readBool('bold', false),
+      italic: readBool('italic', false),
+      textShadow: readBool('textShadow', true),
+      textOutline: readBool('textOutline', false),
+      outlineColorValue: readInt('outlineColorValue', 0xFF000000),
+      outlineWidth: readDouble('outlineWidth', 1),
+      textAlignment: readString('textAlignment', 'left'),
+      lineSpacing: readDouble('lineSpacing', 1.2),
+
       backgroundColorValue:
           readInt('backgroundColorValue', 0xFF000000),
       backgroundOpacity: readDouble('backgroundOpacity', 0),
-      fontFamily: readString('fontFamily', 'Roboto'),
+      backgroundPadding: readDouble('backgroundPadding', 8),
+      backgroundRadius: readDouble('backgroundRadius', 8),
+
       position: readString('position', 'bottomRight'),
       margin: readDouble('margin', 16),
+
+      contentOrder: readStringList(
+        'contentOrder',
+        const [
+          'dateTime',
+          'address',
+          'coordinates',
+          'altitude',
+          'accuracy',
+          'speed',
+          'compass',
+          'sequence',
+          'label',
+          'customText',
+          'note',
+        ],
+      ),
 
       imageQuality: readInt('imageQuality', 95),
     );
@@ -329,8 +471,14 @@ class WatermarkSettings {
   String toJson() => jsonEncode(toMap());
 
   factory WatermarkSettings.fromJson(String source) {
-    return WatermarkSettings.fromMap(
-      jsonDecode(source) as Map<String, dynamic>,
-    );
+    final decoded = jsonDecode(source);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException(
+        'La configuración de marca de agua no es válida.',
+      );
+    }
+
+    return WatermarkSettings.fromMap(decoded);
   }
 }

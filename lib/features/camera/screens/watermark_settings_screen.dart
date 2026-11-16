@@ -1,3 +1,4 @@
+import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,7 +22,9 @@ class WatermarkSettingsScreen extends StatefulWidget {
 
 class _WatermarkSettingsScreenState
     extends State<WatermarkSettingsScreen> {
-  final WatermarkSettingsService _service = WatermarkSettingsService();
+  final WatermarkSettingsService _service =
+      WatermarkSettingsService();
+
   final ImagePicker _imagePicker = ImagePicker();
 
   late WatermarkSettings _settings;
@@ -29,6 +32,9 @@ class _WatermarkSettingsScreenState
   late final TextEditingController _customTextController;
   late final TextEditingController _labelController;
   late final TextEditingController _noteController;
+  late final TextEditingController _sequenceStartController;
+  late final TextEditingController _sequencePrefixController;
+  late final TextEditingController _sequenceSuffixController;
 
   bool _saving = false;
 
@@ -39,6 +45,16 @@ class _WatermarkSettingsScreenState
     const Color(0xFF22C55E),
     const Color(0xFFFFD700),
     const Color(0xFFFF5252),
+    const Color(0xFF06B6D4),
+    const Color(0xFFF97316),
+  ];
+
+  final List<Color> _backgroundColors = [
+    Colors.black,
+    Colors.white,
+    const Color(0xFF1E293B),
+    const Color(0xFF2563EB),
+    const Color(0xFF0F766E),
   ];
 
   @override
@@ -53,6 +69,12 @@ class _WatermarkSettingsScreenState
         TextEditingController(text: _settings.labelText);
     _noteController =
         TextEditingController(text: _settings.noteText);
+    _sequenceStartController =
+        TextEditingController(text: _settings.sequenceStart.toString());
+    _sequencePrefixController =
+        TextEditingController(text: _settings.sequencePrefix);
+    _sequenceSuffixController =
+        TextEditingController(text: _settings.sequenceSuffix);
   }
 
   void _update(WatermarkSettings updated) {
@@ -65,6 +87,7 @@ class _WatermarkSettingsScreenState
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
+        imageQuality: 100,
       );
 
       if (image == null || !mounted) return;
@@ -85,6 +108,8 @@ class _WatermarkSettingsScreenState
   }
 
   Future<void> _save() async {
+    if (_saving) return;
+
     setState(() {
       _saving = true;
     });
@@ -94,6 +119,11 @@ class _WatermarkSettingsScreenState
         customText: _customTextController.text.trim(),
         labelText: _labelController.text.trim(),
         noteText: _noteController.text.trim(),
+        sequenceStart:
+            int.tryParse(_sequenceStartController.text) ??
+                _settings.sequenceStart,
+        sequencePrefix: _sequencePrefixController.text,
+        sequenceSuffix: _sequenceSuffixController.text,
       );
 
       await _service.save(updatedSettings);
@@ -164,6 +194,7 @@ class _WatermarkSettingsScreenState
   }) {
     return DropdownButtonFormField<T>(
       initialValue: value,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -191,7 +222,9 @@ class _WatermarkSettingsScreenState
       children: [
         Text(
           label,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
         ),
         Slider(
           value: value.clamp(min, max),
@@ -219,11 +252,13 @@ class _WatermarkSettingsScreenState
     String? hint,
     int maxLength = 100,
     int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return TextField(
       controller: controller,
       maxLength: maxLength,
       maxLines: maxLines,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -233,111 +268,285 @@ class _WatermarkSettingsScreenState
     );
   }
 
-  Widget _buildPreview() {
-    final color = Color(_settings.colorValue);
-    final backgroundColor = Color(_settings.backgroundColorValue);
+  Widget _colorSelector({
+    required String title,
+    required int selectedColor,
+    required List<Color> colors,
+    required ValueChanged<int> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          children: colors.map((color) {
+            final value = color.toARGB32();
+            final selected = selectedColor == value;
 
-    final previewText = <String>[];
+            return GestureDetector(
+              onTap: () => onSelected(value),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? AppTheme.primaryColor
+                        : AppTheme.borderColor,
+                    width: selected ? 3 : 1,
+                  ),
+                ),
+                child: selected
+                    ? Icon(
+                        Icons.check,
+                        size: 18,
+                        color: color == Colors.white
+                            ? Colors.black
+                            : Colors.white,
+                      )
+                    : null,
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  List<String> _buildPreviewLines() {
+    final lines = <String>[];
 
     if (_settings.showDateTime) {
-      previewText.add('Fecha y hora de captura');
-    }
-    if (_settings.showAddress) {
-      previewText.add('Dirección de ubicación');
-    }
-    if (_settings.showCoordinates) {
-      previewText.add('Coordenadas GPS');
-    }
-    if (_settings.showAltitude) {
-      previewText.add('Altitud');
-    }
-    if (_settings.showAccuracy) {
-      previewText.add('Precisión GPS');
-    }
-    if (_settings.showSpeed) {
-      previewText.add('Velocidad');
-    }
-    if (_settings.showCompass) {
-      previewText.add('Orientación');
-    }
-    if (_settings.showSequence) {
-      previewText.add('Foto ${_settings.sequenceStart.toString().padLeft(_settings.sequenceDigits, '0')}');
-    }
-    if (_settings.showLabel && _settings.labelText.isNotEmpty) {
-      previewText.add(_settings.labelText);
-    }
-    if (_settings.showCustomText && _settings.customText.isNotEmpty) {
-      previewText.add(_settings.customText);
-    }
-    if (_settings.showNote && _settings.noteText.isNotEmpty) {
-      previewText.add(_settings.noteText);
+      lines.add('15/11/2026 14:30:45');
     }
 
-    if (previewText.isEmpty) {
-      previewText.add('Sin información seleccionada');
+    if (_settings.showAddress) {
+      lines.add('Av. Ejemplo, Lima, Perú');
     }
+
+    if (_settings.showCoordinates) {
+      lines.add('-12.046374, -77.042793');
+    }
+
+    if (_settings.showAltitude) {
+      lines.add('Altitud: 150 m');
+    }
+
+    if (_settings.showAccuracy) {
+      lines.add('Precisión: 5 m');
+    }
+
+    if (_settings.showSpeed) {
+      lines.add('Velocidad: 0 km/h');
+    }
+
+    if (_settings.showCompass) {
+      lines.add('Orientación: NE');
+    }
+
+    if (_settings.showSequence) {
+      final number = _settings.sequenceStart
+          .toString()
+          .padLeft(_settings.sequenceDigits, '0');
+
+      lines.add(
+        '${_settings.sequencePrefix}$number${_settings.sequenceSuffix}',
+      );
+    }
+
+    if (_settings.showLabel &&
+        _labelController.text.trim().isNotEmpty) {
+      lines.add(_labelController.text.trim());
+    }
+
+    if (_settings.showCustomText &&
+        _customTextController.text.trim().isNotEmpty) {
+      lines.add(_customTextController.text.trim());
+    }
+
+    if (_settings.showNote &&
+        _noteController.text.trim().isNotEmpty) {
+      lines.add(_noteController.text.trim());
+    }
+
+    return lines;
+  }
+
+  Widget _buildPreview() {
+    final lines = _buildPreviewLines();
+
+    final textColor = Color(_settings.colorValue);
+    final backgroundColor =
+        Color(_settings.backgroundColorValue);
+
+    final alignment = _settings.textAlignment == 'center'
+        ? TextAlign.center
+        : _settings.textAlignment == 'right'
+            ? TextAlign.right
+            : TextAlign.left;
+
+    final crossAlignment =
+        _settings.textAlignment == 'center'
+            ? CrossAxisAlignment.center
+            : _settings.textAlignment == 'right'
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start;
 
     return Container(
       width: double.infinity,
-      height: 190,
+      height: 220,
       decoration: BoxDecoration(
-        color: const Color(0xFF334155),
         borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFF475569),
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          const Positioned.fill(
-            child: Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 55,
-                color: Colors.white24,
-              ),
-            ),
-          ),
-          Positioned(
-            left: _settings.position.endsWith('Left') ? 12 : null,
-            right: _settings.position.endsWith('Right') ? 12 : null,
-            top: _settings.position.startsWith('top') ? 12 : null,
-            bottom: _settings.position.startsWith('bottom') ? 12 : null,
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 260),
-              padding: EdgeInsets.all(_settings.margin.clamp(4, 30)),
-              decoration: BoxDecoration(
-                color: backgroundColor.withValues(
-                  alpha: _settings.backgroundOpacity.clamp(0, 1),
-                ),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Column(
-                crossAxisAlignment:
-                    _settings.position.endsWith('Left')
-                        ? CrossAxisAlignment.start
-                        : CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: previewText.map((line) {
-                  return Text(
-                    line,
-                    textAlign: _settings.position.endsWith('Left')
-                        ? TextAlign.left
-                        : TextAlign.right,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: _settings.fontSize.clamp(10, 28),
-                      fontWeight: FontWeight.w500,
-                      shadows: const [
-                        Shadow(
-                          color: Colors.black87,
-                          blurRadius: 4,
-                        ),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/camera_preview.jpg',
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF64748B),
+                        Color(0xFF334155),
+                        Color(0xFF1E293B),
                       ],
                     ),
-                  );
-                }).toList(),
-              ),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.camera_alt_outlined,
+                      size: 60,
+                      color: Colors.white24,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
+          if (_settings.showLogo &&
+              _settings.logoPath != null)
+            Positioned(
+              left: _settings.logoPosition.endsWith('Left')
+                  ? 12
+                  : null,
+              right: _settings.logoPosition.endsWith('Right')
+                  ? 12
+                  : null,
+              top: _settings.logoPosition.startsWith('top')
+                  ? 12
+                  : null,
+              bottom: _settings.logoPosition.startsWith('bottom')
+                  ? 12
+                  : null,
+              child: Opacity(
+                opacity: _settings.logoOpacity.clamp(0, 1),
+                child: Image.file(
+                  File(_settings.logoPath!),
+                  width: _settings.logoSize.clamp(30, 180),
+                  height: _settings.logoSize.clamp(30, 180),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          if (lines.isNotEmpty)
+            Positioned(
+              left: _settings.position.endsWith('Left')
+                  ? _settings.margin
+                  : null,
+              right: _settings.position.endsWith('Right')
+                  ? _settings.margin
+                  : null,
+              top: _settings.position.startsWith('top')
+                  ? _settings.margin
+                  : null,
+              bottom: _settings.position.startsWith('bottom')
+                  ? _settings.margin
+                  : null,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 260,
+                ),
+                child: Container(
+                  padding: EdgeInsets.all(
+                    _settings.backgroundPadding.clamp(0, 30),
+                  ),
+                  decoration: BoxDecoration(
+                    color: backgroundColor.withValues(
+                      alpha: _settings.backgroundOpacity
+                          .clamp(0, 1),
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      _settings.backgroundRadius.clamp(0, 30),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: crossAlignment,
+                    mainAxisSize: MainAxisSize.min,
+                    children: lines.map((line) {
+                      return Text(
+                        line,
+                        textAlign: alignment,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize:
+                              _settings.fontSize.clamp(10, 28),
+                          fontFamily: _settings.fontFamily,
+                          fontWeight: _settings.bold
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          fontStyle: _settings.italic
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                          height: _settings.lineSpacing,
+                          shadows: _settings.textShadow
+                              ? const [
+                                  Shadow(
+                                    color: Colors.black87,
+                                    blurRadius: 4,
+                                    offset: Offset(1, 1),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+          if (lines.isEmpty)
+            const Positioned(
+              bottom: 12,
+              left: 0,
+              right: 0,
+              child: Text(
+                'Activa algún elemento para visualizarlo',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -354,17 +563,30 @@ class _WatermarkSettingsScreenState
       color: AppTheme.surfaceColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppTheme.borderColor),
+        side: BorderSide(
+          color: AppTheme.borderColor,
+        ),
       ),
       child: ExpansionTile(
-        leading: Icon(icon, color: AppTheme.primaryColor),
+        leading: Icon(
+          icon,
+          color: AppTheme.primaryColor,
+        ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         subtitle: Text(subtitle),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        childrenPadding: const EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          16,
+        ),
+        expandedCrossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [child],
       ),
     );
@@ -376,17 +598,30 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Mostrar fecha y hora',
           value: _settings.showDateTime,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showDateTime: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showDateTime: v),
+          ),
         ),
         _dropdown<String>(
           label: 'Formato de fecha',
           value: _settings.dateFormat,
           items: const [
-            DropdownMenuItem(value: 'dd/MM/yyyy', child: Text('15/11/2026')),
-            DropdownMenuItem(value: 'MM/dd/yyyy', child: Text('11/15/2026')),
-            DropdownMenuItem(value: 'yyyy-MM-dd', child: Text('2026-11-15')),
-            DropdownMenuItem(value: 'dd-MM-yyyy', child: Text('15-11-2026')),
+            DropdownMenuItem(
+              value: 'dd/MM/yyyy',
+              child: Text('15/11/2026'),
+            ),
+            DropdownMenuItem(
+              value: 'MM/dd/yyyy',
+              child: Text('11/15/2026'),
+            ),
+            DropdownMenuItem(
+              value: 'yyyy-MM-dd',
+              child: Text('2026-11-15'),
+            ),
+            DropdownMenuItem(
+              value: 'dd-MM-yyyy',
+              child: Text('15-11-2026'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -399,10 +634,22 @@ class _WatermarkSettingsScreenState
           label: 'Formato de hora',
           value: _settings.timeFormat,
           items: const [
-            DropdownMenuItem(value: 'HH:mm:ss', child: Text('24 horas (14:30:45)')),
-            DropdownMenuItem(value: 'hh:mm:ss a', child: Text('12 horas (02:30:45 PM)')),
-            DropdownMenuItem(value: 'HH:mm', child: Text('24 horas (14:30)')),
-            DropdownMenuItem(value: 'hh:mm a', child: Text('12 horas (02:30 PM)')),
+            DropdownMenuItem(
+              value: 'HH:mm:ss',
+              child: Text('24 horas (14:30:45)'),
+            ),
+            DropdownMenuItem(
+              value: 'hh:mm:ss a',
+              child: Text('12 horas (02:30:45 PM)'),
+            ),
+            DropdownMenuItem(
+              value: 'HH:mm',
+              child: Text('24 horas (14:30)'),
+            ),
+            DropdownMenuItem(
+              value: 'hh:mm a',
+              child: Text('12 horas (02:30 PM)'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -415,8 +662,14 @@ class _WatermarkSettingsScreenState
           label: 'Zona horaria',
           value: _settings.timeZone,
           items: const [
-            DropdownMenuItem(value: 'local', child: Text('Hora local del dispositivo')),
-            DropdownMenuItem(value: 'UTC', child: Text('UTC')),
+            DropdownMenuItem(
+              value: 'local',
+              child: Text('Hora local del dispositivo'),
+            ),
+            DropdownMenuItem(
+              value: 'UTC',
+              child: Text('UTC'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -435,25 +688,35 @@ class _WatermarkSettingsScreenState
           title: 'Dirección',
           subtitle: 'Mostrar la dirección obtenida mediante GPS.',
           value: _settings.showAddress,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showAddress: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showAddress: v),
+          ),
         ),
         _switch(
           title: 'Coordenadas GPS',
           value: _settings.showCoordinates,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showCoordinates: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showCoordinates: v),
+          ),
         ),
         _dropdown<String>(
           label: 'Formato de coordenadas',
           value: _settings.coordinatesFormat,
           items: const [
-            DropdownMenuItem(value: 'decimal', child: Text('Decimal')),
-            DropdownMenuItem(value: 'dms', child: Text('Grados, minutos y segundos')),
+            DropdownMenuItem(
+              value: 'decimal',
+              child: Text('Decimal'),
+            ),
+            DropdownMenuItem(
+              value: 'dms',
+              child: Text('Grados, minutos y segundos'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
-              _update(_settings.copyWith(coordinatesFormat: v));
+              _update(
+                _settings.copyWith(coordinatesFormat: v),
+              );
             }
           },
         ),
@@ -462,12 +725,20 @@ class _WatermarkSettingsScreenState
           label: 'Formato de dirección',
           value: _settings.addressFormat,
           items: const [
-            DropdownMenuItem(value: 'full', child: Text('Dirección completa')),
-            DropdownMenuItem(value: 'short', child: Text('Dirección resumida')),
+            DropdownMenuItem(
+              value: 'full',
+              child: Text('Dirección completa'),
+            ),
+            DropdownMenuItem(
+              value: 'short',
+              child: Text('Dirección resumida'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
-              _update(_settings.copyWith(addressFormat: v));
+              _update(
+                _settings.copyWith(addressFormat: v),
+              );
             }
           },
         ),
@@ -475,26 +746,30 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Altitud',
           value: _settings.showAltitude,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showAltitude: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showAltitude: v),
+          ),
         ),
         _switch(
           title: 'Precisión GPS',
           value: _settings.showAccuracy,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showAccuracy: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showAccuracy: v),
+          ),
         ),
         _switch(
           title: 'Velocidad',
           value: _settings.showSpeed,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showSpeed: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showSpeed: v),
+          ),
         ),
         _switch(
           title: 'Orientación / brújula',
           value: _settings.showCompass,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showCompass: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showCompass: v),
+          ),
         ),
       ],
     );
@@ -505,10 +780,11 @@ class _WatermarkSettingsScreenState
       children: [
         _switch(
           title: 'Mostrar mapa',
-          subtitle: 'Incluir un pequeño mapa de la ubicación.',
+          subtitle: 'Incluir un mapa de la ubicación.',
           value: _settings.showMap,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showMap: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showMap: v),
+          ),
         ),
         _slider(
           label: 'Tamaño del mapa',
@@ -517,8 +793,9 @@ class _WatermarkSettingsScreenState
           max: 200,
           divisions: 14,
           valueLabel: '${_settings.mapSize.round()} px',
-          onChanged: (v) =>
-              _update(_settings.copyWith(mapSize: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(mapSize: v),
+          ),
         ),
         _slider(
           label: 'Opacidad del mapa',
@@ -526,18 +803,32 @@ class _WatermarkSettingsScreenState
           min: 0.1,
           max: 1,
           divisions: 9,
-          valueLabel: '${(_settings.mapOpacity * 100).round()}%',
-          onChanged: (v) =>
-              _update(_settings.copyWith(mapOpacity: v)),
+          valueLabel:
+              '${(_settings.mapOpacity * 100).round()}%',
+          onChanged: (v) => _update(
+            _settings.copyWith(mapOpacity: v),
+          ),
         ),
         _dropdown<String>(
           label: 'Posición del mapa',
           value: _settings.mapPosition,
           items: const [
-            DropdownMenuItem(value: 'topLeft', child: Text('Superior izquierda')),
-            DropdownMenuItem(value: 'topRight', child: Text('Superior derecha')),
-            DropdownMenuItem(value: 'bottomLeft', child: Text('Inferior izquierda')),
-            DropdownMenuItem(value: 'bottomRight', child: Text('Inferior derecha')),
+            DropdownMenuItem(
+              value: 'topLeft',
+              child: Text('Superior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'topRight',
+              child: Text('Superior derecha'),
+            ),
+            DropdownMenuItem(
+              value: 'bottomLeft',
+              child: Text('Inferior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'bottomRight',
+              child: Text('Inferior derecha'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -547,7 +838,7 @@ class _WatermarkSettingsScreenState
         ),
         const SizedBox(height: 8),
         const Text(
-          'La visualización del mapa se implementará junto con la captura de ubicación.',
+          'La incorporación del mapa real se conectará al procesamiento de la fotografía.',
           style: TextStyle(
             fontSize: 12,
             color: AppTheme.secondaryTextColor,
@@ -563,8 +854,9 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Texto personalizado',
           value: _settings.showCustomText,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showCustomText: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showCustomText: v),
+          ),
         ),
         _textField(
           label: 'Texto personalizado',
@@ -575,8 +867,9 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Mostrar etiqueta',
           value: _settings.showLabel,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showLabel: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showLabel: v),
+          ),
         ),
         _textField(
           label: 'Etiqueta',
@@ -587,8 +880,9 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Mostrar nota',
           value: _settings.showNote,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showNote: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showNote: v),
+          ),
         ),
         _textField(
           label: 'Nota',
@@ -606,39 +900,62 @@ class _WatermarkSettingsScreenState
       children: [
         _switch(
           title: 'Numeración de fotografías',
-          subtitle: 'Mostrar un número consecutivo en cada fotografía.',
+          subtitle:
+              'Mostrar un número consecutivo en cada fotografía.',
           value: _settings.showSequence,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showSequence: v)),
-        ),
-        TextFormField(
-          initialValue: _settings.sequenceStart.toString(),
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Número inicial',
-            border: OutlineInputBorder(),
+          onChanged: (v) => _update(
+            _settings.copyWith(showSequence: v),
           ),
-          onChanged: (v) {
-            final number = int.tryParse(v);
-            if (number != null && number > 0) {
-              _update(_settings.copyWith(sequenceStart: number));
-            }
-          },
+        ),
+        _textField(
+          label: 'Número inicial',
+          controller: _sequenceStartController,
+          hint: '1',
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 12),
+        _textField(
+          label: 'Prefijo',
+          controller: _sequencePrefixController,
+          hint: 'Ej. FOTO-',
+        ),
+        const SizedBox(height: 12),
+        _textField(
+          label: 'Sufijo',
+          controller: _sequenceSuffixController,
+          hint: 'Ej. -SITE',
         ),
         const SizedBox(height: 12),
         _dropdown<int>(
           label: 'Cantidad de dígitos',
           value: _settings.sequenceDigits,
           items: const [
-            DropdownMenuItem(value: 1, child: Text('1 dígito (1)')),
-            DropdownMenuItem(value: 2, child: Text('2 dígitos (01)')),
-            DropdownMenuItem(value: 3, child: Text('3 dígitos (001)')),
-            DropdownMenuItem(value: 4, child: Text('4 dígitos (0001)')),
-            DropdownMenuItem(value: 5, child: Text('5 dígitos (00001)')),
+            DropdownMenuItem(
+              value: 1,
+              child: Text('1 dígito (1)'),
+            ),
+            DropdownMenuItem(
+              value: 2,
+              child: Text('2 dígitos (01)'),
+            ),
+            DropdownMenuItem(
+              value: 3,
+              child: Text('3 dígitos (001)'),
+            ),
+            DropdownMenuItem(
+              value: 4,
+              child: Text('4 dígitos (0001)'),
+            ),
+            DropdownMenuItem(
+              value: 5,
+              child: Text('5 dígitos (00001)'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
-              _update(_settings.copyWith(sequenceDigits: v));
+              _update(
+                _settings.copyWith(sequenceDigits: v),
+              );
             }
           },
         ),
@@ -653,8 +970,9 @@ class _WatermarkSettingsScreenState
         _switch(
           title: 'Incluir logotipo',
           value: _settings.showLogo,
-          onChanged: (v) =>
-              _update(_settings.copyWith(showLogo: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(showLogo: v),
+          ),
         ),
         if (_settings.logoPath != null)
           Padding(
@@ -696,8 +1014,9 @@ class _WatermarkSettingsScreenState
           max: 180,
           divisions: 15,
           valueLabel: '${_settings.logoSize.round()} px',
-          onChanged: (v) =>
-              _update(_settings.copyWith(logoSize: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(logoSize: v),
+          ),
         ),
         _slider(
           label: 'Opacidad del logotipo',
@@ -705,22 +1024,38 @@ class _WatermarkSettingsScreenState
           min: 0.1,
           max: 1,
           divisions: 9,
-          valueLabel: '${(_settings.logoOpacity * 100).round()}%',
-          onChanged: (v) =>
-              _update(_settings.copyWith(logoOpacity: v)),
+          valueLabel:
+              '${(_settings.logoOpacity * 100).round()}%',
+          onChanged: (v) => _update(
+            _settings.copyWith(logoOpacity: v),
+          ),
         ),
         _dropdown<String>(
           label: 'Posición del logotipo',
           value: _settings.logoPosition,
           items: const [
-            DropdownMenuItem(value: 'topLeft', child: Text('Superior izquierda')),
-            DropdownMenuItem(value: 'topRight', child: Text('Superior derecha')),
-            DropdownMenuItem(value: 'bottomLeft', child: Text('Inferior izquierda')),
-            DropdownMenuItem(value: 'bottomRight', child: Text('Inferior derecha')),
+            DropdownMenuItem(
+              value: 'topLeft',
+              child: Text('Superior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'topRight',
+              child: Text('Superior derecha'),
+            ),
+            DropdownMenuItem(
+              value: 'bottomLeft',
+              child: Text('Inferior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'bottomRight',
+              child: Text('Inferior derecha'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
-              _update(_settings.copyWith(logoPosition: v));
+              _update(
+                _settings.copyWith(logoPosition: v),
+              );
             }
           },
         ),
@@ -739,96 +1074,27 @@ class _WatermarkSettingsScreenState
           max: 28,
           divisions: 9,
           valueLabel: '${_settings.fontSize.round()} px',
-          onChanged: (v) =>
-              _update(_settings.copyWith(fontSize: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(fontSize: v),
+          ),
         ),
-        const SizedBox(height: 12),
-        const Text(
-          'Color de fuente',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: _colors.map((color) {
-            final selected =
-                _settings.colorValue == color.toARGB32();
-
-            return GestureDetector(
-              onTap: () {
-                _update(_settings.copyWith(
-                  colorValue: color.toARGB32(),
-                ));
-              },
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? AppTheme.primaryColor
-                        : AppTheme.borderColor,
-                    width: selected ? 3 : 1,
-                  ),
-                ),
-                child: selected
-                    ? Icon(
-                        Icons.check,
-                        size: 18,
-                        color: color == Colors.white
-                            ? Colors.black
-                            : Colors.white,
-                      )
-                    : null,
-              ),
-            );
-          }).toList(),
+        const SizedBox(height: 16),
+        _colorSelector(
+          title: 'Color de fuente',
+          selectedColor: _settings.colorValue,
+          colors: _colors,
+          onSelected: (v) => _update(
+            _settings.copyWith(colorValue: v),
+          ),
         ),
         const SizedBox(height: 20),
-        const Text(
-          'Color de fondo',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          children: [
-            Colors.black,
-            Colors.white,
-            const Color(0xFF1E293B),
-            const Color(0xFF2563EB),
-          ].map((color) {
-            final selected =
-                _settings.backgroundColorValue == color.toARGB32();
-
-            return GestureDetector(
-              onTap: () {
-                _update(_settings.copyWith(
-                  backgroundColorValue: color.toARGB32(),
-                ));
-              },
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? AppTheme.primaryColor
-                        : AppTheme.borderColor,
-                    width: selected ? 3 : 1,
-                  ),
-                ),
-                child: selected
-                    ? const Icon(Icons.check, color: Colors.grey, size: 18)
-                    : null,
-              ),
-            );
-          }).toList(),
+        _colorSelector(
+          title: 'Color de fondo',
+          selectedColor: _settings.backgroundColorValue,
+          colors: _backgroundColors,
+          onSelected: (v) => _update(
+            _settings.copyWith(backgroundColorValue: v),
+          ),
         ),
         const SizedBox(height: 12),
         _slider(
@@ -839,38 +1105,172 @@ class _WatermarkSettingsScreenState
           divisions: 10,
           valueLabel:
               '${(_settings.backgroundOpacity * 100).round()}%',
-          onChanged: (v) =>
-              _update(_settings.copyWith(backgroundOpacity: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(backgroundOpacity: v),
+          ),
         ),
+        _slider(
+          label: 'Espaciado interno del fondo',
+          value: _settings.backgroundPadding,
+          min: 0,
+          max: 24,
+          divisions: 12,
+          valueLabel:
+              '${_settings.backgroundPadding.round()} px',
+          onChanged: (v) => _update(
+            _settings.copyWith(backgroundPadding: v),
+          ),
+        ),
+        _slider(
+          label: 'Redondeado de esquinas',
+          value: _settings.backgroundRadius,
+          min: 0,
+          max: 24,
+          divisions: 12,
+          valueLabel:
+              '${_settings.backgroundRadius.round()} px',
+          onChanged: (v) => _update(
+            _settings.copyWith(backgroundRadius: v),
+          ),
+        ),
+        const SizedBox(height: 16),
         _dropdown<String>(
           label: 'Familia tipográfica',
           value: _settings.fontFamily,
           items: const [
-            DropdownMenuItem(value: 'Roboto', child: Text('Roboto')),
-            DropdownMenuItem(value: 'Arial', child: Text('Arial')),
-            DropdownMenuItem(value: 'serif', child: Text('Serif')),
-            DropdownMenuItem(value: 'monospace', child: Text('Monospace')),
+            DropdownMenuItem(
+              value: 'Roboto',
+              child: Text('Roboto'),
+            ),
+            DropdownMenuItem(
+              value: 'Arial',
+              child: Text('Arial'),
+            ),
+            DropdownMenuItem(
+              value: 'serif',
+              child: Text('Serif'),
+            ),
+            DropdownMenuItem(
+              value: 'monospace',
+              child: Text('Monospace'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
-              _update(_settings.copyWith(fontFamily: v));
+              _update(
+                _settings.copyWith(fontFamily: v),
+              );
             }
           },
         ),
         const SizedBox(height: 16),
         const Text(
-          'Posición de la marca de agua',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          'Estilo de texto',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        const SizedBox(height: 10),
+        _switch(
+          title: 'Negrita',
+          value: _settings.bold,
+          onChanged: (v) => _update(
+            _settings.copyWith(bold: v),
+          ),
+        ),
+        _switch(
+          title: 'Cursiva',
+          value: _settings.italic,
+          onChanged: (v) => _update(
+            _settings.copyWith(italic: v),
+          ),
+        ),
+        _switch(
+          title: 'Sombra del texto',
+          value: _settings.textShadow,
+          onChanged: (v) => _update(
+            _settings.copyWith(textShadow: v),
+          ),
+        ),
+        _switch(
+          title: 'Contorno del texto',
+          subtitle:
+              'Se aplicará al procesar la fotografía.',
+          value: _settings.textOutline,
+          onChanged: (v) => _update(
+            _settings.copyWith(textOutline: v),
+          ),
+        ),
+        _slider(
+          label: 'Grosor del contorno',
+          value: _settings.outlineWidth,
+          min: 0.5,
+          max: 4,
+          divisions: 7,
+          valueLabel:
+              _settings.outlineWidth.toStringAsFixed(1),
+          onChanged: (v) => _update(
+            _settings.copyWith(outlineWidth: v),
+          ),
+        ),
         _dropdown<String>(
-          label: 'Posición',
+          label: 'Alineación del texto',
+          value: _settings.textAlignment,
+          items: const [
+            DropdownMenuItem(
+              value: 'left',
+              child: Text('Izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'center',
+              child: Text('Centro'),
+            ),
+            DropdownMenuItem(
+              value: 'right',
+              child: Text('Derecha'),
+            ),
+          ],
+          onChanged: (v) {
+            if (v != null) {
+              _update(
+                _settings.copyWith(textAlignment: v),
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        _slider(
+          label: 'Espaciado entre líneas',
+          value: _settings.lineSpacing,
+          min: 0.8,
+          max: 2,
+          divisions: 12,
+          valueLabel:
+              _settings.lineSpacing.toStringAsFixed(1),
+          onChanged: (v) => _update(
+            _settings.copyWith(lineSpacing: v),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _dropdown<String>(
+          label: 'Posición de la marca de agua',
           value: _settings.position,
           items: const [
-            DropdownMenuItem(value: 'bottomLeft', child: Text('Inferior izquierda')),
-            DropdownMenuItem(value: 'bottomRight', child: Text('Inferior derecha')),
-            DropdownMenuItem(value: 'topLeft', child: Text('Superior izquierda')),
-            DropdownMenuItem(value: 'topRight', child: Text('Superior derecha')),
+            DropdownMenuItem(
+              value: 'bottomLeft',
+              child: Text('Inferior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'bottomRight',
+              child: Text('Inferior derecha'),
+            ),
+            DropdownMenuItem(
+              value: 'topLeft',
+              child: Text('Superior izquierda'),
+            ),
+            DropdownMenuItem(
+              value: 'topRight',
+              child: Text('Superior derecha'),
+            ),
           ],
           onChanged: (v) {
             if (v != null) {
@@ -886,23 +1286,37 @@ class _WatermarkSettingsScreenState
           max: 30,
           divisions: 13,
           valueLabel: '${_settings.margin.round()} px',
-          onChanged: (v) =>
-              _update(_settings.copyWith(margin: v)),
+          onChanged: (v) => _update(
+            _settings.copyWith(margin: v),
+          ),
         ),
       ],
     );
   }
 
   Widget _buildImageSection() {
-    return _slider(
-      label: 'Calidad de imagen',
-      value: _settings.imageQuality.toDouble(),
-      min: 60,
-      max: 100,
-      divisions: 8,
-      valueLabel: '${_settings.imageQuality}%',
-      onChanged: (v) =>
-          _update(_settings.copyWith(imageQuality: v.round())),
+    return Column(
+      children: [
+        _slider(
+          label: 'Calidad de imagen',
+          value: _settings.imageQuality.toDouble(),
+          min: 60,
+          max: 100,
+          divisions: 8,
+          valueLabel: '${_settings.imageQuality}%',
+          onChanged: (v) => _update(
+            _settings.copyWith(imageQuality: v.round()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Una calidad alta conserva más detalles, pero genera archivos de mayor tamaño.',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppTheme.secondaryTextColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -911,6 +1325,9 @@ class _WatermarkSettingsScreenState
     _customTextController.dispose();
     _labelController.dispose();
     _noteController.dispose();
+    _sequenceStartController.dispose();
+    _sequencePrefixController.dispose();
+    _sequenceSuffixController.dispose();
     super.dispose();
   }
 
@@ -925,13 +1342,13 @@ class _WatermarkSettingsScreenState
         children: [
           _sectionTitle(
             'Vista previa',
-            'Ejemplo ilustrativo de la información seleccionada.',
+            'Visualiza cómo se organizará la información en tus fotografías.',
           ),
           const SizedBox(height: 12),
           _buildPreview(),
           const SizedBox(height: 8),
           const Text(
-            'Los datos de ubicación y fecha se sustituirán por información real al implementar el procesamiento de fotografías.',
+            'Esta vista previa es ilustrativa. Los datos reales de captura se incorporarán al conectar la cámara y el procesamiento de fotografías.',
             style: TextStyle(
               fontSize: 12,
               color: AppTheme.secondaryTextColor,
@@ -943,7 +1360,6 @@ class _WatermarkSettingsScreenState
             'Personaliza la información que acompañará a tus fotografías.',
           ),
           const SizedBox(height: 12),
-
           _expansionSection(
             title: 'Fecha y hora',
             subtitle: 'Formato, hora y zona horaria',
@@ -970,7 +1386,7 @@ class _WatermarkSettingsScreenState
           ),
           _expansionSection(
             title: 'Numeración',
-            subtitle: 'Número inicial y cantidad de dígitos',
+            subtitle: 'Número inicial, prefijo y sufijo',
             icon: Icons.format_list_numbered,
             child: _buildSequenceSection(),
           ),
@@ -982,7 +1398,7 @@ class _WatermarkSettingsScreenState
           ),
           _expansionSection(
             title: 'Apariencia',
-            subtitle: 'Colores, tipografía, posición y margen',
+            subtitle: 'Colores, tipografía, fondo y posición',
             icon: Icons.palette_outlined,
             child: _buildAppearanceSection(),
           ),
@@ -992,7 +1408,6 @@ class _WatermarkSettingsScreenState
             icon: Icons.high_quality_outlined,
             child: _buildImageSection(),
           ),
-
           const SizedBox(height: 24),
           SizedBox(
             height: 50,
