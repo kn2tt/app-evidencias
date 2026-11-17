@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_device_compass/flutter_device_compass.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../models/watermark_settings.dart';
@@ -33,6 +37,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   final LocationService _locationService = LocationService();
 
+  final GlobalKey _mapBoundaryKey = GlobalKey();
+
   WatermarkSettings _watermarkSettings =
       const WatermarkSettings();
 
@@ -40,6 +46,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   bool _capturando = false;
   bool _cambiandoCamara = false;
   bool _panelExpandido = true;
+  bool _mapTileError = false;
 
   String? _error;
 
@@ -168,6 +175,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
       setState(() {
         _ubicacionActual = ubicacion;
+        _mapTileError = false;
       });
     } catch (_) {
       // La cámara continúa funcionando sin datos GPS.
@@ -332,6 +340,9 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         }
       }
 
+      // Capturar el mapa visible para incorporarlo a la fotografía.
+      final mapImageBytes = await _capturarMapaPreview();
+
       // 3. Calcular el número correlativo.
       final numeroSecuencia =
           _watermarkSettings.sequenceStart + _fotografias.length;
@@ -344,6 +355,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
         location: ubicacion,
         sequenceNumber: numeroSecuencia,
         heading: _rumboActual,
+        mapImageBytes: mapImageBytes,
       );
 
       if (!mounted) return;
@@ -535,6 +547,183 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       _alternarPanel();
     } else if (velocidad > 100 && _panelExpandido) {
       _alternarPanel();
+    }
+  }
+
+  // ---------------------------------------------------------
+  // MAPA DE UBICACIÓN - OPENSTREETMAP
+  // ---------------------------------------------------------
+
+  Widget _construirMapaPreview({
+    required double scale,
+  }) {
+    final settings = _watermarkSettings;
+    final location = _ubicacionActual;
+
+    if (!settings.showMap ||
+        location == null ||
+        _mapTileError) {
+      return const SizedBox.shrink();
+    }
+
+    final mapSize = settings.mapSize * scale;
+    final margin = settings.margin * scale;
+
+    final position = settings.mapPosition;
+
+    return Positioned(
+      left: position.endsWith('Left') ? margin : null,
+      right: position.endsWith('Right') ? margin : null,
+      top: position.startsWith('top') ? margin : null,
+      bottom: position.startsWith('bottom') ? margin : null,
+      child: Opacity(
+        opacity: settings.mapOpacity.clamp(0.0, 1.0),
+        child: RepaintBoundary(
+          key: _mapBoundaryKey,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8 * scale),
+            child: SizedBox(
+              width: mapSize,
+              height: mapSize,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  FlutterMap(
+                    key: ValueKey(
+                      '${location.latitude}_${location.longitude}',
+                    ),
+                    options: MapOptions(
+                      initialCenter: LatLng(
+                        location.latitude,
+                        location.longitude,
+                      ),
+                      initialZoom: 17,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName:
+                            'com.example.app_evidencias',
+                        errorTileCallback: (tile, error, stackTrace) {
+                          if (!mounted || _mapTileError) return;
+
+                          setState(() {
+                            _mapTileError = true;
+                          });
+                        },
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(
+                              location.latitude,
+                              location.longitude,
+                            ),
+                            width: 24,
+                            height: 24,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: Colors.red,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Atribución obligatoria de OpenStreetMap.
+                  Positioned(
+                    right: 2,
+                    bottom: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 3,
+                        vertical: 1,
+                      ),
+                      color: Colors.white.withValues(alpha: 0.85),
+                      child: const Text(
+                        '© OpenStreetMap contributors',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 7,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------
+  // CAPTURA DEL MAPA PARA LA FOTOGRAFÍA
+  // ---------------------------------------------------------
+
+  Future<Uint8List?> _capturarMapaPreview() async {
+    if (!_watermarkSettings.showMap ||
+        _ubicacionActual == null ||
+        _mapTileError) {
+      return null;
+    }
+
+    ui.Image? image;
+
+    try {
+      // Esperar a que Flutter termine de dibujar el mapa.
+      await WidgetsBinding.instance.endOfFrame;
+
+      // Dar tiempo a que se carguen las teselas visibles.
+      await Future.delayed(
+        const Duration(milliseconds: 900),
+      );
+
+      if (!mounted || _mapTileError) {
+        return null;
+      }
+
+      final boundaryContext = _mapBoundaryKey.currentContext;
+
+      final renderObject =
+          boundaryContext?.findRenderObject();
+
+      if (renderObject is! RenderRepaintBoundary ||
+          renderObject.size.isEmpty) {
+        return null;
+      }
+
+      final previewSize = _controller?.value.previewSize;
+
+      if (previewSize == null) {
+        return null;
+      }
+
+      final scale = (
+        MediaQuery.of(context).size.width /
+        previewSize.height
+      ).clamp(0.25, 1.0).toDouble();
+
+      image = await renderObject.toImage(
+        pixelRatio: 1 / scale,
+      ).timeout(
+        const Duration(seconds: 3),
+      );
+
+      final byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      return byteData?.buffer.asUint8List();
+    } catch (_) {
+      // Si falla el mapa, no se interrumpe la fotografía.
+      return null;
+    } finally {
+      image?.dispose();
     }
   }
 
@@ -889,6 +1078,12 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
                     child: CameraPreview(controller),
                   ),
                 ),
+              ),
+
+              _construirMapaPreview(
+                scale: (constraints.maxWidth / cameraWidth)
+                    .clamp(0.25, 1.0)
+                    .toDouble(),
               ),
 
               _construirMarcaAguaPreview(

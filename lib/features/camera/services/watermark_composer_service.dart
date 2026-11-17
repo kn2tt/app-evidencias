@@ -1,5 +1,5 @@
-
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
@@ -17,6 +17,7 @@ class WatermarkComposerService {
     LocationData? location,
     required int sequenceNumber,
     double? heading,
+    Uint8List? mapImageBytes,
   }) async {
     final originalFile = File(imagePath);
 
@@ -66,6 +67,17 @@ class WatermarkComposerService {
         fullRect,
         ui.Paint()..filterQuality = ui.FilterQuality.high,
       );
+
+      // Dibujar mapa de ubicación.
+      if (settings.showMap && mapImageBytes != null) {
+        await _drawMap(
+          canvas: canvas,
+          mapImageBytes: mapImageBytes,
+          settings: settings,
+          width: width.toDouble(),
+          height: height.toDouble(),
+        );
+      }
 
       if (settings.showLogo &&
           settings.logoPath != null &&
@@ -447,6 +459,97 @@ class WatermarkComposerService {
     }
 
     textPainter.paint(canvas, textOffset);
+  }
+
+  Future<void> _drawMap({
+    required ui.Canvas canvas,
+    required Uint8List mapImageBytes,
+    required WatermarkSettings settings,
+    required double width,
+    required double height,
+  }) async {
+    final codec = await ui.instantiateImageCodec(mapImageBytes);
+
+    ui.Image? mapImage;
+
+    try {
+      final frame = await codec.getNextFrame();
+      mapImage = frame.image;
+
+      final mapSize = settings.mapSize
+          .clamp(60, 200)
+          .toDouble();
+
+      final margin = settings.margin
+          .clamp(0, 200)
+          .toDouble();
+
+      double left;
+      double top;
+
+      if (settings.mapPosition.endsWith('Left')) {
+        left = margin;
+      } else {
+        left = width - mapSize - margin;
+      }
+
+      if (settings.mapPosition.startsWith('top')) {
+        top = margin;
+      } else {
+        top = height - mapSize - margin;
+      }
+
+      // Evitar que el mapa salga de los límites de la fotografía.
+      final maxLeft = (width - mapSize).clamp(0.0, width);
+      final maxTop = (height - mapSize).clamp(0.0, height);
+
+      left = left.clamp(0.0, maxLeft);
+      top = top.clamp(0.0, maxTop);
+
+      final destinationRect = ui.Rect.fromLTWH(
+        left,
+        top,
+        mapSize,
+        mapSize,
+      );
+
+      final sourceRect = ui.Rect.fromLTWH(
+        0,
+        0,
+        mapImage.width.toDouble(),
+        mapImage.height.toDouble(),
+      );
+
+      final radius = ui.Radius.circular(8);
+
+      // Recortar el mapa con bordes redondeados.
+      canvas.save();
+
+      canvas.clipRRect(
+        ui.RRect.fromRectAndRadius(
+          destinationRect,
+          radius,
+        ),
+      );
+
+      final paint = ui.Paint()
+        ..color = Colors.white.withValues(
+          alpha: settings.mapOpacity.clamp(0.0, 1.0),
+        )
+        ..filterQuality = ui.FilterQuality.high;
+
+      canvas.drawImageRect(
+        mapImage,
+        sourceRect,
+        destinationRect,
+        paint,
+      );
+
+      canvas.restore();
+    } finally {
+      mapImage?.dispose();
+      codec.dispose();
+    }
   }
 
   Future<void> _drawLogo({
