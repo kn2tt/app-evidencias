@@ -60,6 +60,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   double? _rumboActual;
 
+  Timer? _relojTimer;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +69,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
     );
+
+    _configurarActualizacionFechaHora();
 
     _cargarConfiguracionMarcaAgua();
     _inicializarCamara();
@@ -85,6 +89,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _watermarkSettings = configuracion;
       });
+
+      _configurarActualizacionFechaHora();
 
       _configurarBrujula();
 
@@ -106,6 +112,8 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _watermarkSettings = configuracionGuardada;
       });
+
+      _configurarActualizacionFechaHora();
 
       _configurarBrujula();
 
@@ -182,6 +190,26 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     } finally {
       _obteniendoUbicacion = false;
     }
+  }
+
+  // ---------------------------------------------------------
+  // ACTUALIZACIÓN DE FECHA Y HORA
+  // ---------------------------------------------------------
+
+  void _configurarActualizacionFechaHora() {
+    _relojTimer?.cancel();
+    _relojTimer = null;
+
+    if (!_watermarkSettings.showDateTime) return;
+
+    _relojTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (!mounted) return;
+
+        setState(() {});
+      },
+    );
   }
 
   // ---------------------------------------------------------
@@ -856,6 +884,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
 
   @override
   void dispose() {
+    _relojTimer?.cancel();
     _controller?.dispose();
     _suscripcionBrujula?.cancel();
 

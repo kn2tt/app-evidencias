@@ -130,7 +130,7 @@ class WatermarkSettings {
     this.lineSpacing = 1.2,
 
     this.backgroundColorValue = 0xFF000000,
-    this.backgroundOpacity = 0,
+    this.backgroundOpacity = 0.55,
     this.backgroundPadding = 8,
     this.backgroundRadius = 8,
 

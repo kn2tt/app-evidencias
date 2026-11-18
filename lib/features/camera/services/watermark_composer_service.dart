@@ -186,18 +186,29 @@ class WatermarkComposerService {
     }
 
     if (settings.showAddress && location != null) {
-      final addressLines = <String>[
-        location.street,
-        location.sector,
-        location.district,
-      ].where((part) => part.trim().isNotEmpty).toList();
+      final street = location.street.trim();
+      final sector = location.sector.trim();
+      final district = location.district.trim();
+
+      final addressLines = <String>[];
+
+      if (street.isNotEmpty) {
+        addressLines.add(street);
+      }
+
+      // Priorizar el sector para evitar mostrar provincias
+      // o divisiones administrativas demasiado generales.
+      final secondaryAddress = sector.isNotEmpty
+          ? sector
+          : district;
+
+      if (secondaryAddress.isNotEmpty &&
+          secondaryAddress.toLowerCase() != street.toLowerCase()) {
+        addressLines.add(secondaryAddress);
+      }
 
       if (addressLines.isNotEmpty) {
         values['address'] = addressLines.join('\n');
-      } else if (location.address.isNotEmpty &&
-          location.address != 'Dirección no disponible') {
-        // Compatibilidad con ubicaciones guardadas anteriormente.
-        values['address'] = location.address;
       }
     }
 
